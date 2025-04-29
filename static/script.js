@@ -52,8 +52,6 @@ document.addEventListener('DOMContentLoaded', () => {
         setTimeout(() => {
              console.log("Intentando obtener lista de sonidos (getSounds)...");
              widget.getSounds((sounds) => {
-                // Log principal del array completo eliminado para limpieza
-                // console.log('Respuesta de widget.getSounds():', sounds);
                 if (sounds) {
                     console.log(`Número de sonidos recibidos por la API: ${sounds.length}`);
                 } else {
@@ -63,7 +61,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (sounds && sounds.length > 0) {
                     console.log(`Procesando ${sounds.length} sonidos para mostrar.`);
                     soundsData = sounds;
-                    displayPlaylist(sounds);
+                    displayPlaylist(sounds); // <--- Llama a la función displayPlaylist actualizada
                     if (currentTrackId) {
                          highlightCurrentTrack(currentTrackId);
                     }
@@ -72,7 +70,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (playlistTracksUl) playlistTracksUl.innerHTML = '<li>No se pudo cargar la lista de reproducción.</li>';
                 }
             });
-        }, getSoundsDelay); // Usar la variable de retraso
+        }, getSoundsDelay);
 
     });
 
@@ -130,23 +128,47 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    /**
+     * Muestra la lista de canciones en el UL con formato "Título, Artista".
+     * @param {Array} sounds - Array de objetos de sonido de la API de SoundCloud.
+     */
     function displayPlaylist(sounds) {
-        if (!playlistTracksUl) return;
-        playlistTracksUl.innerHTML = '';
+        if (!playlistTracksUl) {
+             console.error("Elemento UL #playlist-tracks no encontrado para mostrar la lista.");
+             return;
+        }
+        playlistTracksUl.innerHTML = ''; // Limpiar contenido anterior
         console.log(`Creando ${sounds.length} elementos <li> para la playlist...`);
 
         sounds.forEach((sound, index) => {
             try {
                 const li = document.createElement('li');
-                li.textContent = sound.title || `Pista ${index + 1} (sin título)`; // Fallback
+
+                // --- INICIO CÓDIGO MODIFICADO PARA MOSTRAR TÍTULO, ARTISTA ---
+                const title = sound.title || `Pista ${index + 1} (sin título)`;
+                // Verifica que sound.user y sound.user.username existan
+                const artist = sound.user && sound.user.username ? sound.user.username : null;
+
+                let displayText = title;
+                if (artist) {
+                    // Añade coma y artista solo si el artista existe
+                    displayText += ` By ${artist}`;
+                }
+                li.textContent = displayText; // Establece el texto combinado
+                // --- FIN CÓDIGO MODIFICADO ---
+
+                // Asignar IDs y índice
                 if (sound.id) li.dataset.trackId = sound.id;
                 li.dataset.trackIndex = index;
 
+                // Añadir listener de clic
                 li.addEventListener('click', () => {
                     console.log(`Clic en pista índice ${index}, ID: ${sound.id || 'N/A'}`);
                     widget.skip(index);
                 });
+
                 playlistTracksUl.appendChild(li);
+
             } catch (error) {
                 console.error(`Error al procesar la pista en el índice ${index}:`, sound, error);
             }
@@ -158,13 +180,13 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!playlistTracksUl || trackId === null || trackId === undefined) return;
         removeHighlight();
         const selector = `li[data-track-id="${String(trackId)}"]`;
-        // console.log(`Buscando elemento para resaltar con selector: ${selector}`); // Log opcional
         const trackElement = playlistTracksUl.querySelector(selector);
         if (trackElement) {
             trackElement.classList.add('playing');
             trackElement.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         } else {
-             // console.warn(`No se encontró el elemento li para resaltar el trackId: ${trackId}`); // Log opcional
+             // Opcional: log si no se encuentra el elemento a resaltar
+             // console.warn(`No se encontró el elemento li para resaltar el trackId: ${trackId}`);
         }
     }
 
