@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reproductor SoundCloud</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+    <div class="player-container">
+        <h1>Mi Reproductor de Música</h1>
+
+        <!-- Iframe oculto vía CSS, pero necesario para la API -->
+        <iframe id="soundcloud-widget"
+                width="100%"
+                scrolling="no"
+                frameborder="no"
+                allow="autoplay"
+                style="border: none; overflow: hidden; height: 0; opacity: 0; margin: 0; padding: 0;"
+                src="https://w.soundcloud.com/player/?url={{ playlist_url }}&auto_play=false&buying=false&sharing=false&download=false&show_artwork=false&visual=false&show_comments=false&show_playcount=false&show_user=false&show_reposts=false&color=%23ff5500&hide_related=true">
+        </iframe>
+
+        <!-- Controles personalizados -->
+        <div class="controls">
+            <button id="prev-btn" title="Anterior">⏮️</button>
+            <button id="play-pause-btn" title="Reproducir/Pausar">▶️</button>
+            <button id="next-btn" title="Siguiente">⏭️</button>
+        </div>
+
+        <!-- Información de la pista actual -->
+        <div id="track-info">
+            Cargando información de la pista...
+        </div>
+
+        <!-- Contenedor para la lista de canciones -->
+        <div class="playlist-container">
+            <h2>Lista de Reproducción</h2>
+            <ul id="playlist-tracks">
+                <li>Cargando lista...</li> <!-- Mensaje inicial -->
+            </ul>
+        </div>
+
+    </div> <!-- Fin de .player-container -->
+
+    <!-- Script de la API del Widget de SoundCloud (ESENCIAL) -->
+    <script src="https://w.soundcloud.com/player/api.js"></script>
+    <!-- Tu script personalizado -->
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+
+</body>
+</html>
