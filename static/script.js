@@ -47,7 +47,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         // Obtener y mostrar la lista de canciones con un retraso ajustado
-        const getSoundsDelay = 1500; // Ajusta este valor (en ms) si es necesario
+        const getSoundsDelay = 2500; // Ajusta este valor (en ms) si es necesario
         console.log(`Esperando ${getSoundsDelay}ms antes de llamar a getSounds()...`);
         setTimeout(() => {
              console.log("Intentando obtener lista de sonidos (getSounds)...");
