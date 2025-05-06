@@ -1,119 +1,272 @@
 // static/script.js
+/**
+ * Script principal para controlar el reproductor de música SoundCloud personalizado.
+ * Maneja la interfaz de usuario (botones, barra de progreso, lista de canciones),
+ * interactúa con la API del Widget de SoundCloud para la reproducción,
+ * y gestiona un sistema de bloqueo/desbloqueo de canciones individuales y global.
+ */
 document.addEventListener('DOMContentLoaded', () => {
-    // --- Referencias HTML ---
+
+    // --- REFERENCIAS A ELEMENTOS DEL DOM ---
+    // Elementos principales del reproductor
     const iframeElement = document.getElementById('soundcloud-widget');
     const playPauseBtn = document.getElementById('play-pause-btn');
     const prevBtn = document.getElementById('prev-btn');
     const nextBtn = document.getElementById('next-btn');
-    const unlockBtn = document.getElementById('unlock-btn'); // Botón global
+    const unlockBtn = document.getElementById('unlock-btn'); // Botón de desbloqueo global
     const trackInfoDiv = document.getElementById('track-info');
     const playlistTracksUl = document.getElementById('playlist-tracks');
+    // Elementos de la barra de progreso
     const progressBar = document.getElementById('progress-bar');
     const progressContainer = document.getElementById('progress-container');
     const currentTimeSpan = document.getElementById('current-time');
     const totalDurationSpan = document.getElementById('total-duration');
-    // Referencias del Modal
+    // Elementos del Modal de Contraseña
     const passwordModal = document.getElementById('password-modal');
     const passwordInput = document.getElementById('password-input');
     const modalOkBtn = document.getElementById('modal-ok-btn');
     const modalCancelBtn = document.getElementById('modal-cancel-btn');
     const modalOverlay = passwordModal ? passwordModal.querySelector('.modal-overlay') : null;
 
-    // --- Comprobación inicial de elementos esenciales ---
-    if (!iframeElement || !passwordModal || !modalOkBtn || !modalCancelBtn || !modalOverlay || !unlockBtn) {
-         console.error("Error: Falta algún elemento esencial (iframe, modal o botón unlock).");
-         if(trackInfoDiv) trackInfoDiv.textContent = "Error de inicialización.";
+    // --- COMPROBACIÓN INICIAL DE ELEMENTOS ESENCIALES ---
+    // Si falta alguno de los elementos críticos, muestra un error y detiene la ejecución.
+    if (!iframeElement || !passwordModal || !modalOkBtn || !modalCancelBtn || !modalOverlay || !unlockBtn || !playlistTracksUl) {
+         console.error("Error Crítico: Falta algún elemento HTML esencial (iframe, modal, botón unlock o lista ul).");
+         if(trackInfoDiv) trackInfoDiv.textContent = "Error de inicialización de interfaz.";
+         // Deshabilitar controles principales si falta algo
          [playPauseBtn, prevBtn, nextBtn, unlockBtn, progressContainer].forEach(btn => { if(btn) btn.disabled = true; });
-         return;
+         return; // Detener el script
     }
 
-    // --- Inicializar Widget ---
+    // --- INICIALIZACIÓN DEL WIDGET SOUNDCLOUD ---
+    // Crea el objeto 'widget' que interactuará con el iframe. Requiere que api.js se haya cargado.
     const widget = SC.Widget(iframeElement);
 
-    // --- Variables de Estado ---
-    let isPlaying = false;
-    let currentTrackId = null;
-    let soundsData = [];
-    let currentDuration = 0;
-    let lockedTrackIds = new Set(); // Almacena IDs de tracks bloqueados (inicia vacío)
+    // --- VARIABLES DE ESTADO DE LA APLICACIÓN ---
+    let isPlaying = false;             // Indica si la música está actualmente reproduciéndose.
+    let currentTrackId = null;         // Almacena el ID de SoundCloud de la pista actual.
+    let soundsData = [];               // Array para guardar los objetos de sonido recibidos de la API.
+    let currentDuration = 0;           // Duración total (en ms) de la pista actual.
+    let lockedTrackIds = new Set();    // Un Set para almacenar los IDs de las canciones bloqueadas individualmente. Inicia vacío (desbloqueado).
 
-    // --- Vinculación con Eventos del Widget ---
+    // --- VINCULACIÓN CON EVENTOS DEL WIDGET SOUNDCLOUD ---
+    // Se usan callbacks para reaccionar a acciones que ocurren dentro del iframe.
 
-    // 1. Evento READY
+    /**
+     * Evento READY: Se dispara cuando el widget está listo para recibir comandos.
+     * Es el punto de entrada principal para inicializar el estado y obtener datos.
+     */
     widget.bind(SC.Widget.Events.READY, () => {
-        console.log('Widget listo.');
+        console.log('Widget SoundCloud listo.');
         if (trackInfoDiv) trackInfoDiv.textContent = 'Reproductor listo.';
-        widget.getCurrentSound((currentSound) => { if (currentSound) { updateTrackInfo(currentSound); currentTrackId = currentSound.id; } else { if (trackInfoDiv) trackInfoDiv.textContent = 'Playlist cargada.'; } });
-        widget.isPaused((paused) => { isPlaying = !paused; updatePlayPauseButton(); });
 
-        const getSoundsDelay = 1500;
+        // Obtener información de la pista inicial (si la hay cargada por defecto)
+        widget.getCurrentSound((currentSound) => {
+            if (currentSound) {
+                updateTrackInfo(currentSound);
+                currentTrackId = currentSound.id;
+            } else {
+                if (trackInfoDiv) trackInfoDiv.textContent = 'Playlist cargada.';
+            }
+        });
+
+        // Comprobar si ya está reproduciendo (puede pasar si el usuario interactuó rápido)
+        widget.isPaused((paused) => {
+            isPlaying = !paused;
+            updatePlayPauseButton();
+        });
+
+        // Obtener la lista de sonidos de la playlist.
+        // Se usa un setTimeout porque a veces el widget necesita un instante extra
+        // después de READY para tener los metadatos (títulos) de todas las canciones,
+        // especialmente en playlists largas.
+        const getSoundsDelay = 1500; // Retraso en milisegundos. Ajustar si es necesario.
+        console.log(`Esperando ${getSoundsDelay}ms antes de llamar a getSounds()...`);
         setTimeout(() => {
-            widget.getSounds((sounds) => {
+             console.log("Intentando obtener lista de sonidos (getSounds)...");
+             widget.getSounds((sounds) => {
+                if (sounds) {
+                    console.log(`Número de sonidos recibidos por la API: ${sounds.length}`);
+                }
+
                 if (sounds && sounds.length > 0) {
-                    soundsData = sounds;
-                    displayPlaylist(sounds); // Renderiza la lista con candados desbloqueados
-                    if (currentTrackId) { highlightCurrentTrack(currentTrackId); }
-                } else { console.warn('getSounds no devolvió sonidos.'); if (playlistTracksUl) playlistTracksUl.innerHTML = '<li>Lista no disponible.</li>'; }
+                    soundsData = sounds; // Guardar datos para referencia futura
+                    displayPlaylist(sounds); // Renderizar la lista en la UI
+                    // Si ya teníamos una pista cargada al inicio, resaltarla ahora que la lista existe
+                    if (currentTrackId) {
+                        highlightCurrentTrack(currentTrackId);
+                    }
+                } else {
+                    console.warn('getSounds no devolvió sonidos o la lista está vacía.');
+                    if (playlistTracksUl) playlistTracksUl.innerHTML = '<li>Lista no disponible o vacía.</li>';
+                }
             });
         }, getSoundsDelay);
     });
 
-    // 2. Evento PLAY (con chequeo de bloqueo individual)
+    /**
+     * Evento PLAY: Se dispara cuando la reproducción comienza o se reanuda.
+     * Crucial para actualizar la UI y verificar si la pista que va a sonar está bloqueada.
+     */
     widget.bind(SC.Widget.Events.PLAY, () => {
-        isPlaying = true; // Asumir que empieza, luego comprobar bloqueo
+        isPlaying = true; // Asumir que empieza, luego verificar bloqueo
         updatePlayPauseButton();
+
         widget.getCurrentSound(sound => {
              if (sound) {
-                 // Comprobar si la pista está bloqueada *antes* de actualizar UI
+                 // --- ¡IMPORTANTE! Verificar si la pista está bloqueada ANTES de hacer nada más ---
                  if (lockedTrackIds.has(sound.id)) {
-                     console.warn(`PLAY bloqueado: Pista ${sound.id} está bloqueada.`);
-                     isPlaying = false; // Corregir estado
+                     console.warn(`PLAY BLOQUEADO: La pista "${sound.title}" (${sound.id}) está bloqueada.`);
+                     isPlaying = false; // Corregir el estado
                      updatePlayPauseButton();
-                     widget.pause(); // Asegurar pausa
-                     // Opcional: intentar saltar a la siguiente
+                     widget.pause(); // Forzar pausa inmediata
+                     // Opcional: Intentar saltar a la siguiente pista automáticamente
                      const currentIndex = soundsData.findIndex(s => s.id === sound.id);
-                     if (currentIndex > -1 && currentIndex < soundsData.length - 1) { setTimeout(() => widget.next(), 100); }
-                     return; // No continuar si está bloqueado
+                     if (currentIndex > -1 && currentIndex < soundsData.length - 1) {
+                         console.log("Intentando saltar a la siguiente pista...");
+                         setTimeout(() => widget.next(), 100); // Pequeño delay para evitar bucles
+                     }
+                     return; // Detener el procesamiento de este evento PLAY
                  }
-                 // Si no está bloqueado, proceder
-                 console.log('Evento PLAY procesado.');
-                 updateTrackInfo(sound);
-                 currentTrackId = sound.id;
-                 highlightCurrentTrack(sound.id);
+
+                 // --- Si la pista NO está bloqueada, proceder normalmente ---
+                 console.log(`Evento PLAY procesado para: "${sound.title}"`);
+                 updateTrackInfo(sound); // Mostrar nombre de la pista
+                 currentTrackId = sound.id; // Actualizar ID de la pista actual
+                 highlightCurrentTrack(sound.id); // Resaltar en la lista
+
+                 // Obtener y mostrar la duración total de la nueva pista
                  widget.getDuration((duration) => {
                      currentDuration = duration;
                      if (totalDurationSpan) totalDurationSpan.textContent = formatTime(duration);
+                     console.log(`Duración: ${formatTime(duration)}`);
+                     // Resetear barra y tiempo al inicio de la pista
                      if(progressBar) progressBar.style.width = '0%';
                      if(currentTimeSpan) currentTimeSpan.textContent = '0:00';
                  });
+             } else {
+                 console.warn("Evento PLAY recibido pero no se pudo obtener info de la pista actual.");
              }
         });
     });
 
-    // 3. Evento PAUSE
-    widget.bind(SC.Widget.Events.PAUSE, () => { console.log('Evento PAUSE recibido'); isPlaying = false; updatePlayPauseButton(); });
-    // 4. Evento FINISH
-    widget.bind(SC.Widget.Events.FINISH, () => { console.log('Evento FINISH recibido'); if (progressBar) progressBar.style.width = '0%'; if (currentTimeSpan) currentTimeSpan.textContent = '0:00'; });
-    // 5. Evento ERROR
-    widget.bind(SC.Widget.Events.ERROR, (error) => { console.error('Error del widget:', error); if (trackInfoDiv) trackInfoDiv.textContent = 'Error en widget.'; });
-    // 6. Evento PLAY_PROGRESS
-    widget.bind(SC.Widget.Events.PLAY_PROGRESS, (progressData) => { if (isPlaying && currentDuration > 0 && progressBar && currentTimeSpan) { const currentPosition = progressData.currentPosition; const progressPercent = Math.min((currentPosition / currentDuration) * 100, 100); progressBar.style.width = `${progressPercent}%`; currentTimeSpan.textContent = formatTime(currentPosition); } });
+    /**
+     * Evento PAUSE: Se dispara cuando la reproducción se pausa.
+     */
+    widget.bind(SC.Widget.Events.PAUSE, () => {
+        console.log('Evento PAUSE recibido');
+        isPlaying = false;
+        updatePlayPauseButton();
+    });
+
+    /**
+     * Evento FINISH: Se dispara cuando una pista termina de reproducirse.
+     * El widget normalmente pasa a la siguiente y dispara un evento PLAY.
+     */
+    widget.bind(SC.Widget.Events.FINISH, () => {
+        console.log('Evento FINISH recibido (pista terminada)');
+        // Resetear la barra de progreso visualmente
+        if (progressBar) progressBar.style.width = '0%';
+        if (currentTimeSpan) currentTimeSpan.textContent = '0:00';
+        // No es necesario resetear currentDuration aquí, el evento PLAY de la siguiente pista lo hará.
+    });
+
+    /**
+     * Evento ERROR: Se dispara si ocurre un error dentro del widget.
+     */
+    widget.bind(SC.Widget.Events.ERROR, (error) => {
+        console.error('Error del widget de SoundCloud:', error);
+        if (trackInfoDiv) trackInfoDiv.textContent = 'Error en el reproductor.';
+    });
+
+    /**
+     * Evento PLAY_PROGRESS: Se dispara repetidamente mientras la canción suena,
+     * proporcionando la posición actual. Usado para actualizar la barra de progreso.
+     * @param {object} progressData - Objeto con { currentPosition: ms, relativePosition: 0-1 }
+     */
+    widget.bind(SC.Widget.Events.PLAY_PROGRESS, (progressData) => {
+        // Actualizar solo si estamos reproduciendo y tenemos una duración válida
+        if (isPlaying && currentDuration > 0 && progressBar && currentTimeSpan) {
+            const currentPosition = progressData.currentPosition;
+            // Calcular porcentaje, asegurando que no exceda 100% por errores de redondeo.
+            const progressPercent = Math.min((currentPosition / currentDuration) * 100, 100);
+
+            progressBar.style.width = `${progressPercent}%`;
+            currentTimeSpan.textContent = formatTime(currentPosition);
+        }
+    });
 
 
-    // --- Funciones Auxiliares ---
+    // --- FUNCIONES AUXILIARES ---
 
-    /** Formatea milisegundos a formato MM:SS */
-    function formatTime(ms) { if (isNaN(ms) || ms <= 0) { return "0:00"; } const s = Math.floor(ms / 1000); return `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, '0')}`; }
-    /** Actualiza el icono y título del botón Play/Pause */
-    function updatePlayPauseButton() { if (!playPauseBtn) return; playPauseBtn.textContent = isPlaying ? '⏸️' : '▶️'; playPauseBtn.title = isPlaying ? 'Pausar' : 'Reproducir'; }
-    /** Muestra la información de la pista actual */
-    function updateTrackInfo(sound) { if (!trackInfoDiv) return; if (sound) { const user = sound.user && sound.user.username ? ` (${sound.user.username})` : ''; trackInfoDiv.textContent = `Sonando: ${sound.title}${user}`; } else { trackInfoDiv.textContent = isPlaying ? 'Cargando...' : 'Pausado.'; } }
-    /** Quita el resaltado de cualquier canción en la lista */
-    function removeHighlight() { if (!playlistTracksUl) return; const el = playlistTracksUl.querySelector('li.playing'); if (el) el.classList.remove('playing'); }
-    /** Resalta la canción que está sonando actualmente */
-    function highlightCurrentTrack(trackId) { if (!playlistTracksUl || trackId === null || trackId === undefined) return; removeHighlight(); const selector = `li[data-track-id="${String(trackId)}"]`; const el = playlistTracksUl.querySelector(selector); if (el) { el.classList.add('playing'); el.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } }
+    /**
+     * Formatea un tiempo en milisegundos al formato "MM:SS".
+     * @param {number} ms - Tiempo en milisegundos.
+     * @returns {string} Tiempo formateado o "0:00" si la entrada no es válida.
+     */
+    function formatTime(ms) {
+        if (isNaN(ms) || ms <= 0) { return "0:00"; }
+        const totalSeconds = Math.floor(ms / 1000);
+        const minutes = Math.floor(totalSeconds / 60);
+        const seconds = totalSeconds % 60;
+        // padStart(2, '0') añade un cero inicial a los segundos si son menores a 10 (ej. 5 -> "05")
+        return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+    }
 
-    /** Actualiza la apariencia de TODOS los tracks y sus candados según lockedTrackIds */
+    /** Actualiza el icono y el título del botón Play/Pause según el estado 'isPlaying'. */
+    function updatePlayPauseButton() {
+        if (!playPauseBtn) return;
+        playPauseBtn.textContent = isPlaying ? '⏸️' : '▶️';
+        playPauseBtn.title = isPlaying ? 'Pausar' : 'Reproducir';
+    }
+
+    /** Muestra el título y artista de la pista actual en el div #track-info. */
+    function updateTrackInfo(sound) {
+        if (!trackInfoDiv) return;
+        if (sound) {
+            // Intenta obtener el nombre de usuario (artista), si no existe, muestra solo el título.
+            const artistUsername = sound.user && sound.user.username ? ` (${sound.user.username})` : '';
+            trackInfoDiv.textContent = `Sonando: ${sound.title}${artistUsername}`;
+        } else {
+            // Texto por defecto si no hay información de pista
+            trackInfoDiv.textContent = isPlaying ? 'Cargando información...' : 'Pausado o detenido.';
+        }
+    }
+
+    /** Quita la clase 'playing' de cualquier elemento <li> que la tenga en la lista. */
+    function removeHighlight() {
+        if (!playlistTracksUl) return;
+        const currentlyPlayingElement = playlistTracksUl.querySelector('li.playing');
+        if (currentlyPlayingElement) {
+            currentlyPlayingElement.classList.remove('playing');
+        }
+    }
+
+    /**
+     * Añade la clase 'playing' al elemento <li> correspondiente al trackId dado
+     * y hace scroll para que sea visible.
+     * @param {number|string} trackId - El ID de la pista a resaltar.
+     */
+    function highlightCurrentTrack(trackId) {
+        if (!playlistTracksUl || trackId === null || trackId === undefined) return;
+        removeHighlight(); // Primero quitar resaltado anterior
+        // Construir selector CSS para encontrar el li por su data-attribute
+        const selector = `li[data-track-id="${String(trackId)}"]`;
+        const trackElement = playlistTracksUl.querySelector(selector);
+        if (trackElement) {
+            trackElement.classList.add('playing');
+            // Hacer scroll suave para que el elemento sea visible si la lista es larga
+            trackElement.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        } else {
+             // console.warn(`highlightCurrentTrack: No se encontró li para trackId: ${trackId}`); // Log opcional
+        }
+    }
+
+    /**
+     * Itera sobre todos los elementos <li> de la playlist y actualiza su icono
+     * de candado (🔒/🔓) y la clase 'locked-track' según el estado actual
+     * del Set `lockedTrackIds`. Se usa después del desbloqueo global.
+     */
     function updateAllTrackAppearances() {
         if (!playlistTracksUl) return;
         const trackItems = playlistTracksUl.querySelectorAll('li[data-track-id]');
@@ -121,143 +274,207 @@ document.addEventListener('DOMContentLoaded', () => {
         trackItems.forEach(item => {
             const trackId = item.dataset.trackId;
             const lockIcon = item.querySelector('.lock-icon');
-            if (!trackId || !lockIcon) return; // Seguridad extra
+            if (!trackId || !lockIcon) return; // Saltar si falta ID o icono
+
             if (lockedTrackIds.has(trackId)) {
-                lockIcon.textContent = '🔒'; item.classList.add('locked-track');
+                // Estado Bloqueado
+                lockIcon.textContent = '🔒';
+                item.classList.add('locked-track');
             } else {
-                lockIcon.textContent = '🔓'; item.classList.remove('locked-track');
+                // Estado Desbloqueado
+                lockIcon.textContent = '🔓';
+                item.classList.remove('locked-track');
             }
         });
     }
 
-    // --- Funciones del Modal ---
+    // --- FUNCIONES DEL MODAL DE CONTRASEÑA ---
+
+    /** Muestra el modal de contraseña, limpia el input y pone el foco. */
     function showPasswordModal() {
-        passwordInput.value = ''; // Limpiar campo antes de mostrar
+        if (!passwordModal || !passwordInput) return;
+        passwordInput.value = ''; // Limpiar contraseña anterior
         passwordModal.style.display = 'block';
-        passwordInput.focus(); // Poner foco en el input
+        passwordInput.focus(); // Poner el cursor en el campo de contraseña
     }
+
+    /** Oculta el modal de contraseña. */
     function hidePasswordModal() {
+        if (!passwordModal) return;
         passwordModal.style.display = 'none';
     }
 
-    /** Muestra la lista. Candado individual SOLO bloquea. */
-    function displayPlaylist(sounds) {
-        if (!playlistTracksUl) { return; }
-        playlistTracksUl.innerHTML = '';
-        sounds.forEach((sound, index) => {
-             if (!sound || !sound.id) { console.warn(`Sonido ${index} sin ID.`); return; }
-            const trackId = sound.id;
-            try {
-                const li = document.createElement('li');
-                li.dataset.trackId = trackId; li.dataset.trackIndex = index;
+    // --- FUNCIÓN PRINCIPAL DE RENDERIZADO DE LA LISTA ---
 
-                // Crear Texto (clic reproduce)
+    /**
+     * Genera los elementos <li> para cada canción en la playlist,
+     * añadiendo el texto (título, artista) y el icono de candado.
+     * Configura los event listeners para el texto (reproducir) y el candado (bloquear).
+     * @param {Array} sounds - Array de objetos de sonido de la API.
+     */
+    function displayPlaylist(sounds) {
+        if (!playlistTracksUl) {
+            console.error("Error: Elemento UL #playlist-tracks no encontrado.");
+            return;
+        }
+        playlistTracksUl.innerHTML = ''; // Limpiar lista anterior
+
+        sounds.forEach((sound, index) => {
+            // Es crucial tener un ID para la lógica de bloqueo/resaltado
+             if (!sound || !sound.id) {
+                console.warn(`Sonido en índice ${index} omitido por falta de ID.`);
+                return; // Saltar a la siguiente iteración si no hay ID
+             }
+            const trackId = sound.id;
+
+            try {
+                // Crear elemento principal de la lista
+                const li = document.createElement('li');
+                li.dataset.trackId = trackId; // Guardar ID para referencia futura
+                li.dataset.trackIndex = index; // Guardar índice para widget.skip()
+
+                // Crear span para el texto clicable (Título, Artista)
                 const textSpan = document.createElement('span');
                 textSpan.classList.add('track-text');
-                const title = sound.title || `Pista ${index + 1}`;
+                const title = sound.title || `Pista ${index + 1} (Título desconocido)`; // Fallback
                 const artist = sound.user && sound.user.username ? sound.user.username : null;
                 textSpan.textContent = artist ? `${title}, ${artist}` : title;
                 li.appendChild(textSpan);
 
-                // Crear Icono de Candado
+                // Crear span para el icono de candado (Clicable solo para bloquear)
                 const lockSpan = document.createElement('span');
                 lockSpan.classList.add('lock-icon');
-                lockSpan.dataset.trackId = trackId; // Asociar ID para fácil acceso
-                const isLocked = lockedTrackIds.has(trackId); // Comprobar estado actual
+                lockSpan.dataset.trackId = trackId; // Asociar ID también al icono
+                // Determinar estado inicial del candado y clase del <li>
+                const isLocked = lockedTrackIds.has(trackId);
                 lockSpan.textContent = isLocked ? '🔒' : '🔓';
-                if (isLocked) { li.classList.add('locked-track'); }
-                li.appendChild(lockSpan); // Añadir candado al final
+                if (isLocked) {
+                    li.classList.add('locked-track');
+                }
+                li.appendChild(lockSpan); // Añadir candado al final del <li>
 
-                // Event Listener para el Texto (Reproducir, chequea bloqueo)
+                // --- Event Listener para el TEXTO de la canción (Reproducir) ---
                 textSpan.addEventListener('click', () => {
+                    // Comprobar si esta pista está bloqueada ANTES de reproducir
                     if (lockedTrackIds.has(trackId)) {
-                        alert(`"${textSpan.textContent}" está bloqueada 🔒. Usa el botón global 🔓 para desbloquear.`);
-                        return;
+                        console.log(`Clic en texto de pista bloqueada: "${textSpan.textContent}"`);
+                        alert(`"${textSpan.textContent}" está bloqueada 🔒.\nUsa el botón global 🔓 para desbloquear todas.`);
+                        return; // No hacer nada si está bloqueada
                     }
+                    // Si no está bloqueada, llamar a widget.skip() con el índice guardado
+                    console.log(`Reproduciendo pista ${index}: "${textSpan.textContent}"`);
                     widget.skip(index);
                 });
 
-                // Event Listener para el Candado (SOLO BLOQUEAR)
+                // --- Event Listener para el ICONO de candado (SOLO para Bloquear) ---
                 lockSpan.addEventListener('click', (event) => {
-                    event.stopPropagation(); // Prevenir clic en texto/li
+                    event.stopPropagation(); // Evitar que el clic se propague al textSpan o li
+
                     const currentlyLocked = lockedTrackIds.has(trackId);
 
-                    // Solo actuar si NO está bloqueado actualmente (icono es 🔓)
+                    // Solo ejecutar la acción de bloqueo si NO está bloqueada actualmente (icono es 🔓)
                     if (!currentlyLocked) {
-                        // Bloquear la canción
-                        lockedTrackIds.add(trackId);
-                        lockSpan.textContent = '🔒';
-                        li.classList.add('locked-track');
-                        console.log(`Track ${trackId} BLOQUEADO.`);
-                        // Pausar si se bloquea la canción actual mientras suena
+                        lockedTrackIds.add(trackId);    // Añadir al Set de bloqueados
+                        lockSpan.textContent = '🔒';    // Cambiar icono visualmente
+                        li.classList.add('locked-track'); // Aplicar estilo de bloqueado
+                        console.log(`Track ${trackId} (${title}) BLOQUEADO.`);
+
+                        // Si se acaba de bloquear la canción que está sonando, pausarla.
                         if (trackId === currentTrackId && isPlaying) {
-                            console.log("Canción actual bloqueada, pausando...");
+                            console.log("Canción actual bloqueada mientras sonaba, pausando...");
                             widget.pause();
                         }
-                        // console.log("IDs bloqueados:", lockedTrackIds); // Log opcional
                     } else {
-                        // Si ya está bloqueado (🔒), no hacer nada al hacer clic
-                        console.log(`Clic en candado bloqueado para track ${trackId}. No se desbloquea.`);
+                        // Si el icono ya es 🔒 (currentlyLocked es true), no hacer nada.
+                        console.log(`Clic en candado bloqueado 🔒 para track ${trackId}. No se desbloquea individualmente.`);
+                        // Opcionalmente, añadir un tooltip o feedback
+                        lockSpan.title = "Esta canción está bloqueada. Usa el botón global 🔓 para desbloquear todo.";
                     }
+                     // console.log("IDs bloqueados actuales:", lockedTrackIds); // Log opcional
                 });
 
+                // Añadir el elemento <li> completo a la lista <ul>
                 playlistTracksUl.appendChild(li);
-            } catch (error) { console.error(`Error procesando pista ${index}:`, error); }
+
+            } catch (error) {
+                // Capturar errores inesperados durante la creación del elemento li
+                console.error(`Error al procesar la pista en el índice ${index}:`, sound, error);
+            }
         });
     }
 
-    // --- Conexión de Botones (Prev/Play/Next) ---
-    if (playPauseBtn) { playPauseBtn.addEventListener('click', () => widget.toggle()); }
-    if (prevBtn) { prevBtn.addEventListener('click', () => widget.prev()); }
-    if (nextBtn) { nextBtn.addEventListener('click', () => widget.next()); }
+    // --- CONEXIÓN DE EVENT LISTENERS DE LA UI (Botones, Barra, Modal) ---
 
-    // --- Event Listener para Seeking ---
+    // Botones de Control Principales (Prev/Play/Next)
+    if (playPauseBtn) { playPauseBtn.addEventListener('click', () => widget.toggle()); }
+    if (prevBtn) { prevBtn.addEventListener('click', () => widget.prev()); } // El evento PLAY manejará chequeos de bloqueo
+    if (nextBtn) { nextBtn.addEventListener('click', () => widget.next()); } // El evento PLAY manejará chequeos de bloqueo
+
+    // Barra de Progreso (Seeking)
     if (progressContainer) {
         progressContainer.addEventListener('click', (event) => {
-            if (currentDuration <= 0) return;
-            const cWidth = progressContainer.offsetWidth;
-            const cX = event.offsetX;
-            const cPercent = Math.max(0, Math.min(1, cX / cWidth));
-            const seekMs = Math.floor(cPercent * currentDuration);
-            if (progressBar) progressBar.style.width = `${cPercent * 100}%`;
-            if (currentTimeSpan) currentTimeSpan.textContent = formatTime(seekMs);
-            widget.seekTo(seekMs);
+            if (currentDuration <= 0) return; // No buscar si no hay duración
+            const containerWidth = progressContainer.offsetWidth;
+            const clickPositionX = event.offsetX;
+            // Calcular porcentaje asegurando que esté entre 0 y 1
+            const clickPercent = Math.max(0, Math.min(1, clickPositionX / containerWidth));
+            const seekTimeMs = Math.floor(clickPercent * currentDuration);
+
+            // Actualizar UI inmediatamente para feedback visual
+            if (progressBar) progressBar.style.width = `${clickPercent * 100}%`;
+            if (currentTimeSpan) currentTimeSpan.textContent = formatTime(seekTimeMs);
+            // Enviar comando de seek al widget
+            widget.seekTo(seekTimeMs);
         });
     }
 
-    // --- Event Listeners para el Modal y Botón Global ---
+    // Botón de Desbloqueo Global
     if (unlockBtn) {
         unlockBtn.addEventListener('click', () => {
+            // Solo mostrar el modal si hay al menos una canción bloqueada
             if (lockedTrackIds.size === 0) {
                  alert("Actualmente no hay ninguna canción bloqueada.");
                  return;
             }
-            showPasswordModal();
+            showPasswordModal(); // Mostrar el modal para pedir contraseña
         });
     }
+
+    // Botón OK del Modal (Verificar contraseña y desbloquear)
     if (modalOkBtn) {
         modalOkBtn.addEventListener('click', () => {
-            const pass = passwordInput.value;
-            if (pass === "12345") {
+            const enteredPassword = passwordInput.value;
+            if (enteredPassword === "12345") { // Contraseña correcta
                 console.log("Contraseña global correcta. Desbloqueando todo...");
-                lockedTrackIds.clear(); // Vaciar el set de bloqueados
-                updateAllTrackAppearances(); // Actualizar visualmente todos
+                lockedTrackIds.clear();          // Vaciar el Set de IDs bloqueados
+                updateAllTrackAppearances();     // Actualizar todos los candados y estilos en la UI
                 alert("¡Todas las canciones han sido desbloqueadas!");
-                hidePasswordModal();
-            } else {
+                hidePasswordModal();             // Ocultar el modal
+            } else { // Contraseña incorrecta
                 alert("Contraseña incorrecta.");
-                passwordInput.focus();
-                passwordInput.select(); // Seleccionar para fácil reescritura
+                passwordInput.focus();           // Devolver foco al input
+                passwordInput.select();          // Seleccionar texto para fácil reescritura
             }
         });
     }
-    if (modalCancelBtn) { modalCancelBtn.addEventListener('click', hidePasswordModal); }
-    if (modalOverlay) { modalOverlay.addEventListener('click', hidePasswordModal); }
+
+    // Botón Cancelar del Modal
+    if (modalCancelBtn) {
+        modalCancelBtn.addEventListener('click', hidePasswordModal);
+    }
+
+    // Clic en el Overlay (fondo oscuro) del Modal también lo cierra
+     if (modalOverlay) {
+        modalOverlay.addEventListener('click', hidePasswordModal);
+    }
+
+     // Permitir enviar la contraseña presionando Enter en el input
     if (passwordInput) {
         passwordInput.addEventListener('keypress', function (e) {
+            // Si la tecla presionada es Enter
             if (e.key === 'Enter') {
-                e.preventDefault();
-                modalOkBtn.click(); // Simular clic en OK
+                e.preventDefault();    // Evitar comportamiento por defecto (ej. submit de formulario)
+                modalOkBtn.click();    // Simular un clic en el botón OK
             }
         });
     }
