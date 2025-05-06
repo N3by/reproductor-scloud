@@ -4,10 +4,11 @@ body {
     background-color: #f4f4f4;
     display: flex;
     justify-content: center;
-    align-items: flex-start; /* Cambiado a flex-start para que no centre verticalmente todo */
+    align-items: flex-start;
     min-height: 100vh;
     margin: 0;
-    padding-top: 30px; /* Añadir algo de espacio arriba */
+    padding-top: 30px;
+    padding-bottom: 30px; /* Añadir espacio abajo también */
 }
 
 .player-container {
@@ -18,12 +19,11 @@ body {
     text-align: center;
     max-width: 500px;
     width: 90%;
-    margin-bottom: 30px; /* Espacio abajo */
 }
 
 h1 {
     color: #333;
-    margin-top: 0; /* Quitar margen superior por defecto */
+    margin-top: 0;
     margin-bottom: 25px;
 }
 
@@ -31,25 +31,12 @@ h1 {
 #soundcloud-widget {
     display: block;
     width: 100%;
-    height: 0 !important; /* Muy importante */
+    height: 0 !important;
     border: none;
     opacity: 0;
     overflow: hidden;
     margin: 0;
     padding: 0;
-    /* Si height: 0 no funciona, descomenta esto y comenta lo anterior */
-    /*
-    position: absolute;
-    left: -9999px;
-    top: 0;
-    width: 1px;
-    height: 1px;
-    opacity: 0;
-    border: none;
-    overflow: hidden;
-    margin: 0;
-    padding: 0;
-    */
 }
 
 /* --- Controles personalizados --- */
@@ -83,13 +70,48 @@ h1 {
 
 /* --- Información de la pista --- */
 #track-info {
-    margin-top: 15px;
+    margin-top: 15px; /* Espacio sobre la info */
+    margin-bottom: 5px; /* Reducir espacio bajo la info, antes de la barra */
     font-size: 0.9em;
     color: #555;
     min-height: 1.2em;
     font-style: italic;
-    word-wrap: break-word; /* Para evitar desbordamiento con títulos largos */
+    word-wrap: break-word;
 }
+
+/* --- Estilos para la Barra de Progreso --- */
+.progress-section {
+    margin-top: 15px; /* Espacio sobre la barra, ajustado */
+    margin-bottom: 20px; /* Espacio debajo de los tiempos */
+}
+
+.progress-container {
+    background-color: #e0e0e0; /* Color de fondo de la barra vacía */
+    border-radius: 5px;
+    cursor: pointer; 
+    height: 8px;     /* Altura de la barra */
+    width: 100%;
+    overflow: hidden;
+    position: relative;
+}
+
+.progress-bar {
+    background-color: #ff5500; /* Color naranja SoundCloud para el progreso */
+    height: 100%;
+    width: 0%; /* Empieza vacía */
+    border-radius: 5px;
+    /* Evitar transición si se actualiza muy rápido (PLAY_PROGRESS) */
+    /* transition: width 0.1s linear; */
+}
+
+.time-display {
+    font-size: 0.8em;
+    color: #666;
+    margin-top: 5px;
+    display: flex;
+    justify-content: space-between;
+}
+
 
 /* --- Contenedor y Lista de Reproducción --- */
 .playlist-container {
@@ -102,7 +124,7 @@ h1 {
 .playlist-container h2 {
     font-size: 1.1em;
     color: #444;
-    margin-top: 0; /* Quitar margen superior por defecto */
+    margin-top: 0;
     margin-bottom: 10px;
 }
 
@@ -110,23 +132,23 @@ h1 {
     list-style: none;
     padding: 0;
     margin: 0;
-    max-height: 250px;  /* Altura máxima - AJUSTA ESTO según necesites */
-    overflow-y: auto;   /* Scroll vertical si se supera max-height */
-    border: 1px solid #ddd; /* Borde un poco más visible */
+    max-height: 250px;
+    overflow-y: auto;
+    border: 1px solid #ddd;
     border-radius: 4px;
-    background-color: #fff; /* Fondo explícito */
+    background-color: #fff;
 }
 
 #playlist-tracks li {
-    padding: 10px 12px; /* Un poco más de padding */
+    padding: 10px 12px;
     border-bottom: 1px solid #eee;
-    font-size: 0.85em; /* Un poco más pequeño si hay muchas canciones */
+    font-size: 0.85em;
     color: #333;
     cursor: pointer;
     transition: background-color 0.2s ease;
-    white-space: nowrap; /* Evita que el texto salte de línea */
-    overflow: hidden;      /* Oculta el texto que no cabe */
-    text-overflow: ellipsis; /* Muestra "..." si el texto no cabe */
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 #playlist-tracks li:last-child {
@@ -139,9 +161,9 @@ h1 {
 
 /* Estilo para la canción que está sonando actualmente */
 #playlist-tracks li.playing {
-    background-color: #ffe8cc; /* Naranja claro */
+    background-color: #ffe8cc;
     font-weight: bold;
-    color: #cc4400; /* Naranja oscuro */
+    color: #cc4400;
 }
 
 /* --- Estilos para la barra de scroll (Opcional - específico Webkit/Blink) --- */

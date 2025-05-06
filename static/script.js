@@ -7,6 +7,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const nextBtn = document.getElementById('next-btn');
     const trackInfoDiv = document.getElementById('track-info');
     const playlistTracksUl = document.getElementById('playlist-tracks');
+    // Referencias para progreso y seek
+    const progressBar = document.getElementById('progress-bar');
+    const progressContainer = document.getElementById('progress-container');
+    const currentTimeSpan = document.getElementById('current-time');
+    const totalDurationSpan = document.getElementById('total-duration');
 
     // --- Comprobación inicial del iframe ---
     if (!iframeElement) {
@@ -22,6 +27,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let isPlaying = false;
     let currentTrackId = null;
     let soundsData = [];
+    let currentDuration = 0; // Duración total de la pista actual en ms
 
     // --- Vinculación con la API del Widget ---
 
@@ -30,7 +36,6 @@ document.addEventListener('DOMContentLoaded', () => {
         console.log('Widget de SoundCloud listo.');
         if (trackInfoDiv) trackInfoDiv.textContent = 'Reproductor listo.';
 
-        // Obtener información de la pista inicial
         widget.getCurrentSound((currentSound) => {
             if (currentSound) {
                 updateTrackInfo(currentSound);
@@ -40,38 +45,27 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
 
-        // Comprobar estado inicial de reproducción
         widget.isPaused((paused) => {
             isPlaying = !paused;
             updatePlayPauseButton();
         });
 
-        // Obtener y mostrar la lista de canciones con un retraso ajustado
-        const getSoundsDelay = 2500; // Ajusta este valor (en ms) si es necesario
+        const getSoundsDelay = 1500;
         console.log(`Esperando ${getSoundsDelay}ms antes de llamar a getSounds()...`);
         setTimeout(() => {
              console.log("Intentando obtener lista de sonidos (getSounds)...");
              widget.getSounds((sounds) => {
-                if (sounds) {
-                    console.log(`Número de sonidos recibidos por la API: ${sounds.length}`);
-                } else {
-                    console.log('La API devolvió null o undefined para los sonidos.');
-                }
-
+                if (sounds) { console.log(`Número de sonidos recibidos: ${sounds.length}`); }
                 if (sounds && sounds.length > 0) {
-                    console.log(`Procesando ${sounds.length} sonidos para mostrar.`);
                     soundsData = sounds;
-                    displayPlaylist(sounds); // <--- Llama a la función displayPlaylist actualizada
-                    if (currentTrackId) {
-                         highlightCurrentTrack(currentTrackId);
-                    }
+                    displayPlaylist(sounds);
+                    if (currentTrackId) { highlightCurrentTrack(currentTrackId); }
                 } else {
-                    console.warn('No se pudieron obtener los sonidos de la playlist desde el widget (getSounds).');
-                    if (playlistTracksUl) playlistTracksUl.innerHTML = '<li>No se pudo cargar la lista de reproducción.</li>';
+                    console.warn('No se pudieron obtener sonidos (getSounds).');
+                    if (playlistTracksUl) playlistTracksUl.innerHTML = '<li>Lista no disponible.</li>';
                 }
             });
         }, getSoundsDelay);
-
     });
 
     // 2. Evento: Empieza la reproducción
@@ -84,6 +78,13 @@ document.addEventListener('DOMContentLoaded', () => {
                  updateTrackInfo(sound);
                  currentTrackId = sound.id;
                  highlightCurrentTrack(sound.id);
+                 widget.getDuration((duration) => {
+                     currentDuration = duration;
+                     if (totalDurationSpan) totalDurationSpan.textContent = formatTime(duration);
+                     console.log(`Duración obtenida: ${formatTime(duration)} (${duration}ms)`);
+                     if(progressBar) progressBar.style.width = '0%'; // Resetear barra al inicio de pista
+                     if(currentTimeSpan) currentTimeSpan.textContent = '0:00';
+                 });
              }
         });
     });
@@ -98,84 +99,86 @@ document.addEventListener('DOMContentLoaded', () => {
     // 4. Evento: Una canción termina
     widget.bind(SC.Widget.Events.FINISH, () => {
         console.log('Evento FINISH recibido (canción terminada)');
+        if (progressBar) progressBar.style.width = '0%';
+        if (currentTimeSpan) currentTimeSpan.textContent = '0:00';
+        // Opcional: resetear duración total también
+        // if (totalDurationSpan) totalDurationSpan.textContent = '0:00';
+        // currentDuration = 0;
     });
 
      // 5. Evento: Error en el widget
     widget.bind(SC.Widget.Events.ERROR, (error) => {
         console.error('Error del widget de SoundCloud:', error);
-        if (trackInfoDiv) trackInfoDiv.textContent = 'Error al cargar la pista o playlist.';
+        if (trackInfoDiv) trackInfoDiv.textContent = 'Error al cargar pista/playlist.';
+    });
+
+    // 6. Evento: Progreso de la reproducción
+    widget.bind(SC.Widget.Events.PLAY_PROGRESS, (progressData) => {
+        // Solo actualiza si realmente estamos reproduciendo y tenemos duración
+        if (isPlaying && currentDuration > 0 && progressBar && currentTimeSpan) {
+            const currentPosition = progressData.currentPosition;
+            // Asegurarse de no exceder el 100% por pequeñas discrepancias de tiempo
+            const progressPercent = Math.min((currentPosition / currentDuration) * 100, 100);
+
+            progressBar.style.width = `${progressPercent}%`;
+            currentTimeSpan.textContent = formatTime(currentPosition);
+        }
     });
 
     // --- Funciones Auxiliares ---
 
+    /** Formatea milisegundos a formato MM:SS */
+    function formatTime(ms) {
+        if (isNaN(ms) || ms <= 0) { return "0:00"; }
+        const totalSeconds = Math.floor(ms / 1000);
+        const minutes = Math.floor(totalSeconds / 60);
+        const seconds = totalSeconds % 60;
+        return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+    }
+
+    /** Actualiza el icono y título del botón Play/Pause */
     function updatePlayPauseButton() {
         if (!playPauseBtn) return;
         playPauseBtn.textContent = isPlaying ? '⏸️' : '▶️';
         playPauseBtn.title = isPlaying ? 'Pausar' : 'Reproducir';
     }
 
+    /** Muestra la información de la pista actual en el div correspondiente */
     function updateTrackInfo(sound) {
         if (!trackInfoDiv) return;
         if (sound) {
             const username = sound.user && sound.user.username ? ` (${sound.user.username})` : '';
             trackInfoDiv.textContent = `Sonando: ${sound.title}${username}`;
         } else {
-             if (!isPlaying) {
-                 trackInfoDiv.textContent = 'Pausado o detenido.';
-             } else {
-                 trackInfoDiv.textContent = 'Cargando información...';
-             }
+             if (!isPlaying) { trackInfoDiv.textContent = 'Pausado o detenido.'; }
+             else { trackInfoDiv.textContent = 'Cargando información...'; }
         }
     }
 
-    /**
-     * Muestra la lista de canciones en el UL con formato "Título, Artista".
-     * @param {Array} sounds - Array de objetos de sonido de la API de SoundCloud.
-     */
+    /** Muestra la lista de canciones en el UL con formato "Título, Artista". */
     function displayPlaylist(sounds) {
-        if (!playlistTracksUl) {
-             console.error("Elemento UL #playlist-tracks no encontrado para mostrar la lista.");
-             return;
-        }
-        playlistTracksUl.innerHTML = ''; // Limpiar contenido anterior
-        console.log(`Creando ${sounds.length} elementos <li> para la playlist...`);
-
+        if (!playlistTracksUl) { return; }
+        playlistTracksUl.innerHTML = '';
+        console.log(`Creando ${sounds.length} elementos <li>...`);
         sounds.forEach((sound, index) => {
             try {
                 const li = document.createElement('li');
-
-                // --- INICIO CÓDIGO MODIFICADO PARA MOSTRAR TÍTULO, ARTISTA ---
                 const title = sound.title || `Pista ${index + 1} (sin título)`;
-                // Verifica que sound.user y sound.user.username existan
                 const artist = sound.user && sound.user.username ? sound.user.username : null;
-
                 let displayText = title;
-                if (artist) {
-                    // Añade coma y artista solo si el artista existe
-                    displayText += ` By ${artist}`;
-                }
-                li.textContent = displayText; // Establece el texto combinado
-                // --- FIN CÓDIGO MODIFICADO ---
-
-                // Asignar IDs y índice
+                if (artist) { displayText += `, ${artist}`; }
+                li.textContent = displayText;
                 if (sound.id) li.dataset.trackId = sound.id;
                 li.dataset.trackIndex = index;
-
-                // Añadir listener de clic
-                li.addEventListener('click', () => {
-                    console.log(`Clic en pista índice ${index}, ID: ${sound.id || 'N/A'}`);
-                    widget.skip(index);
-                });
-
+                li.addEventListener('click', () => { widget.skip(index); });
                 playlistTracksUl.appendChild(li);
-
             } catch (error) {
-                console.error(`Error al procesar la pista en el índice ${index}:`, sound, error);
+                console.error(`Error al procesar pista ${index}:`, sound, error);
             }
         });
-        console.log("Elementos <li> añadidos al DOM.");
     }
 
+    /** Resalta la canción que está sonando actualmente en la lista. */
     function highlightCurrentTrack(trackId) {
         if (!playlistTracksUl || trackId === null || trackId === undefined) return;
         removeHighlight();
@@ -184,18 +187,14 @@ document.addEventListener('DOMContentLoaded', () => {
         if (trackElement) {
             trackElement.classList.add('playing');
             trackElement.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-        } else {
-             // Opcional: log si no se encuentra el elemento a resaltar
-             // console.warn(`No se encontró el elemento li para resaltar el trackId: ${trackId}`);
         }
     }
 
+    /** Quita el resaltado de cualquier canción en la lista */
     function removeHighlight() {
         if (!playlistTracksUl) return;
         const currentlyPlaying = playlistTracksUl.querySelector('li.playing');
-        if (currentlyPlaying) {
-            currentlyPlaying.classList.remove('playing');
-        }
+        if (currentlyPlaying) { currentlyPlaying.classList.remove('playing'); }
     }
 
     // --- Conexión de Botones HTML a la API ---
@@ -210,6 +209,36 @@ document.addEventListener('DOMContentLoaded', () => {
        nextBtn.addEventListener('click', () => {
             widget.next();
             setTimeout(() => widget.getCurrentSound(sound => { if(sound) { updateTrackInfo(sound); currentTrackId = sound.id; highlightCurrentTrack(sound.id); } }), 300);
+        });
+    }
+
+    // --- Event Listener para Seeking en la Barra de Progreso ---
+    if (progressContainer) {
+        progressContainer.addEventListener('click', (event) => {
+            // 1. Verificar si tenemos duración válida
+            if (currentDuration <= 0) {
+                console.log("No se puede buscar: duración inválida.");
+                return;
+            }
+
+            // 2. Calcular posición del clic
+            const containerWidth = progressContainer.offsetWidth;
+            const clickPositionX = event.offsetX;
+
+            // 3. Calcular porcentaje
+            const clickPercent = Math.max(0, Math.min(1, clickPositionX / containerWidth)); // Asegurar entre 0 y 1
+
+            // 4. Calcular tiempo en ms
+            const seekTimeMs = Math.floor(clickPercent * currentDuration);
+
+            console.log(`Clic en barra: ${clickPercent.toFixed(2)}% -> ${formatTime(seekTimeMs)} (${seekTimeMs}ms)`);
+
+            // 5. Actualizar UI inmediatamente (opcional pero recomendado)
+            if (progressBar) progressBar.style.width = `${clickPercent * 100}%`;
+            if (currentTimeSpan) currentTimeSpan.textContent = formatTime(seekTimeMs);
+
+            // 6. Realizar el seek en SoundCloud
+            widget.seekTo(seekTimeMs);
         });
     }
 
