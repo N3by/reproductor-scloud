@@ -8,7 +8,7 @@ body {
     min-height: 100vh;
     margin: 0;
     padding-top: 30px;
-    padding-bottom: 30px; /* Añadir espacio abajo también */
+    padding-bottom: 30px;
 }
 
 .player-container {
@@ -49,7 +49,6 @@ h1 {
 }
 
 .controls button {
-    background-color: #ff5500;
     color: white;
     border: none;
     padding: 10px 15px;
@@ -60,8 +59,18 @@ h1 {
     min-width: 60px;
 }
 
-.controls button:hover {
+/* Colores específicos por botón */
+#prev-btn, #play-pause-btn, #next-btn {
+    background-color: #ff5500;
+}
+#prev-btn:hover, #play-pause-btn:hover, #next-btn:hover {
     background-color: #cc4400;
+}
+#unlock-btn {
+    background-color: #6c757d; /* Gris */
+}
+#unlock-btn:hover {
+    background-color: #5a6268;
 }
 
 .controls button:active {
@@ -70,8 +79,8 @@ h1 {
 
 /* --- Información de la pista --- */
 #track-info {
-    margin-top: 15px; /* Espacio sobre la info */
-    margin-bottom: 5px; /* Reducir espacio bajo la info, antes de la barra */
+    margin-top: 15px;
+    margin-bottom: 5px;
     font-size: 0.9em;
     color: #555;
     min-height: 1.2em;
@@ -81,27 +90,25 @@ h1 {
 
 /* --- Estilos para la Barra de Progreso --- */
 .progress-section {
-    margin-top: 15px; /* Espacio sobre la barra, ajustado */
-    margin-bottom: 20px; /* Espacio debajo de los tiempos */
+    margin-top: 15px;
+    margin-bottom: 20px;
 }
 
 .progress-container {
-    background-color: #e0e0e0; /* Color de fondo de la barra vacía */
+    background-color: #e0e0e0;
     border-radius: 5px;
-    cursor: pointer; 
-    height: 8px;     /* Altura de la barra */
+    cursor: pointer;
+    height: 8px;
     width: 100%;
     overflow: hidden;
     position: relative;
 }
 
 .progress-bar {
-    background-color: #ff5500; /* Color naranja SoundCloud para el progreso */
+    background-color: #ff5500;
     height: 100%;
-    width: 0%; /* Empieza vacía */
+    width: 0%;
     border-radius: 5px;
-    /* Evitar transición si se actualiza muy rápido (PLAY_PROGRESS) */
-    /* transition: width 0.1s linear; */
 }
 
 .time-display {
@@ -144,19 +151,49 @@ h1 {
     border-bottom: 1px solid #eee;
     font-size: 0.85em;
     color: #333;
-    cursor: pointer;
-    transition: background-color 0.2s ease;
+    transition: opacity 0.3s ease;
     white-space: nowrap;
     overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+/* Contenedor para el texto (clic reproduce) */
+.track-text {
+    flex-grow: 1;
+    cursor: pointer;
+    overflow: hidden;
     text-overflow: ellipsis;
+    margin-right: 8px;
+    transition: color 0.2s ease;
 }
 
-#playlist-tracks li:last-child {
-    border-bottom: none;
+/* Icono de candado (clic BLOQUEA si está abierto) */
+.lock-icon {
+    font-size: 0.9em;
+    flex-shrink: 0;
+    cursor: pointer; /* Sigue siendo clicable para bloquear */
+    padding: 2px 4px;
+    border-radius: 3px;
 }
 
-#playlist-tracks li:hover {
-    background-color: #f5f5f5;
+/* Estilo para track bloqueado */
+#playlist-tracks li.locked-track .track-text {
+     opacity: 0.6;
+     cursor: not-allowed;
+}
+/* Candado bloqueado: no es clicable para desbloquear individualmente */
+#playlist-tracks li.locked-track .lock-icon {
+    cursor: default; /* Cambiar cursor a normal para indicar inactividad */
+}
+
+
+#playlist-tracks li:last-child { border-bottom: none; }
+
+/* Hover solo en texto no bloqueado */
+#playlist-tracks li:not(.locked-track) .track-text:hover {
+     color: #ff5500;
 }
 
 /* Estilo para la canción que está sonando actualmente */
@@ -165,19 +202,28 @@ h1 {
     font-weight: bold;
     color: #cc4400;
 }
+#playlist-tracks li.playing .track-text {
+    opacity: 1;
+    color: #cc4400;
+}
 
-/* --- Estilos para la barra de scroll (Opcional - específico Webkit/Blink) --- */
-#playlist-tracks::-webkit-scrollbar {
-  width: 8px;
-}
-#playlist-tracks::-webkit-scrollbar-track {
-  background: #f1f1f1;
-  border-radius: 4px;
-}
-#playlist-tracks::-webkit-scrollbar-thumb {
-  background: #ccc;
-  border-radius: 4px;
-}
-#playlist-tracks::-webkit-scrollbar-thumb:hover {
-  background: #aaa;
-}
+
+/* --- Estilos para la barra de scroll --- */
+#playlist-tracks::-webkit-scrollbar { width: 8px; }
+#playlist-tracks::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 4px; }
+#playlist-tracks::-webkit-scrollbar-thumb { background: #ccc; border-radius: 4px; }
+#playlist-tracks::-webkit-scrollbar-thumb:hover { background: #aaa; }
+
+/* --- Estilos para el Modal de Contraseña --- */
+.modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; }
+.modal-overlay { position: fixed; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.5); }
+.modal-content { background-color: #fefefe; margin: 15% auto; padding: 20px 30px; border: 1px solid #888; width: 80%; max-width: 400px; border-radius: 8px; box-shadow: 0 5px 15px rgba(0,0,0,0.2); position: relative; z-index: 1001; text-align: center; }
+.modal-content h3 { margin-top: 0; color: #333; }
+.modal-content label { display: block; margin-bottom: 5px; text-align: left; font-weight: bold; }
+.modal-content input[type="password"] { width: 100%; padding: 10px; margin-bottom: 15px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+.modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 10px; }
+.modal-actions button { padding: 8px 15px; border-radius: 4px; cursor: pointer; border: none; font-size: 0.9em; }
+#modal-ok-btn { background-color: #28a745; color: white; }
+#modal-ok-btn:hover { background-color: #218838; }
+#modal-cancel-btn { background-color: #6c757d; color: white; }
+#modal-cancel-btn:hover { background-color: #5a6268; }

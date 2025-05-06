@@ -21,11 +21,12 @@
                 src="https://w.soundcloud.com/player/?url={{ playlist_url }}&auto_play=false&buying=false&sharing=false&download=false&show_artwork=false&visual=false&show_comments=false&show_playcount=false&show_user=false&show_reposts=false&color=%23ff5500&hide_related=true">
         </iframe>
 
-        <!-- Controles personalizados -->
+        <!-- Controles personalizados (CON el botón unlock global) -->
         <div class="controls">
             <button id="prev-btn" title="Anterior">⏮️</button>
             <button id="play-pause-btn" title="Reproducir/Pausar">▶️</button>
             <button id="next-btn" title="Siguiente">⏭️</button>
+            <button id="unlock-btn" title="Desbloquear TODO (Contraseña)">🔓</button> <!-- Botón Global -->
         </div>
 
         <!-- Información de la pista actual -->
@@ -53,9 +54,24 @@
 
     </div> <!-- Fin de .player-container -->
 
-    <!-- Script de la API del Widget de SoundCloud (ESENCIAL) -->
+    <!-- Modal para la Contraseña -->
+    <div id="password-modal" class="modal">
+        <div class="modal-overlay"></div>
+        <div class="modal-content">
+            <h3>Desbloquear Todas las Canciones</h3>
+            <label for="password-input">Contraseña:</label>
+            <!-- Input de tipo password para ocultar caracteres -->
+            <input type="password" id="password-input" name="password-input" required>
+            <div class="modal-actions">
+                <button id="modal-ok-btn">Desbloquear</button>
+                <button id="modal-cancel-btn">Cancelar</button>
+            </div>
+        </div>
+    </div>
+    <!-- FIN Modal -->
+
+    <!-- Scripts -->
     <script src="https://w.soundcloud.com/player/api.js"></script>
-    <!-- Tu script personalizado -->
     <script src="{{ url_for('static', filename='script.js') }}"></script>
 
 </body>
